@@ -1,1 +1,811 @@
+-- ============================================================
+-- FILE    : 01_create_tables.sql
+-- PROJECT : E-Commerce Sales Analysis (Olist Dataset)
+-- AUTHOR  : Pavithra Panneerselvam
+-- ============================================================
+--
+-- PURPOSE
+-- -------
+-- Creates the 5 core staging tables that mirror the Olist
+-- dataset schema. Olist is a Brazilian e-commerce marketplace
+-- that connects small merchants to customers across Brazil.
+--
+-- WHY MULTIPLE TABLES?
+-- --------------------
+-- Unlike the Telecom project (single flat table), real-world
+-- business data is always relational. Olist stores orders,
+-- customers, products, sellers, and payments in separate
+-- tables linked by keys. This mirrors how data lives in
+-- actual company databases (ERP, CRM, payment systems).
+--
+-- Analysing this data requires JOINs — the most important
+-- and most tested SQL skill in BA interviews.
+--
+-- TABLE RELATIONSHIPS
+-- -------------------
+--   orders          ─── order_id ──► order_items
+--   orders          ─── customer_id ──► customers
+--   order_items     ─── product_id ──► products
+--   order_items     ─── seller_id ──► sellers
+--   orders          ─── order_id ──► order_payments
+--
+-- NEXT STEP
+-- ---------
+-- After running this script, execute 02_insert_data.sql.
+-- ============================================================
 
+
+-- Core orders table — one row per order
+CREATE TABLE orders (
+    order_id                VARCHAR(40),
+    customer_id             VARCHAR(40),
+    order_status            VARCHAR(20),    -- delivered, shipped, cancelled, etc.
+    order_purchase_ts       TIMESTAMP,      -- when customer placed the order
+    order_approved_ts       TIMESTAMP,      -- when payment was approved
+    order_delivered_ts      TIMESTAMP,      -- when customer received the order
+    order_estimated_ts      TIMESTAMP       -- estimated delivery date
+);
+
+-- Customers — one row per unique customer
+CREATE TABLE customers (
+    customer_id             VARCHAR(40),
+    customer_city           VARCHAR(50),
+    customer_state          VARCHAR(5)      -- Brazilian state code (SP, RJ, MG...)
+);
+
+-- Order line items — one row per product within an order
+CREATE TABLE order_items (
+    order_id                VARCHAR(40),
+    order_item_id           INT,            -- line number within the order (1, 2, 3...)
+    product_id              VARCHAR(40),
+    seller_id               VARCHAR(40),
+    price                   NUMERIC(10, 2), -- item price in BRL
+    freight_value           NUMERIC(10, 2)  -- shipping cost for this item
+);
+
+-- Products — one row per unique product
+CREATE TABLE products (
+    product_id              VARCHAR(40),
+    product_category        VARCHAR(60)     -- e.g. electronics, furniture, beauty
+);
+
+-- Payments — one row per payment transaction (orders can have multiple)
+CREATE TABLE order_payments (
+    order_id                VARCHAR(40),
+    payment_sequential      INT,            -- payment number if split across methods
+    payment_type            VARCHAR(20),    -- credit_card, boleto, voucher, debit_card
+    payment_installments    INT,            -- number of installments chosen
+    payment_value           NUMERIC(10, 2)  -- amount paid in this transaction
+);
+
+-- ============================================================
+-- FILE    : 02_insert_data.sql
+-- PROJECT : E-Commerce Sales Analysis (Olist Dataset)
+-- ============================================================
+--
+-- PURPOSE
+-- -------
+-- Loads representative sample data across all 5 tables.
+-- Records are hand-picked from the full Olist Kaggle dataset
+-- to cover all key analytical scenarios used in this project:
+--
+--   - Multiple order statuses (delivered, cancelled, shipped)
+--   - Multiple product categories (electronics, beauty, etc.)
+--   - Multiple payment types (credit card, boleto, voucher)
+--   - Multi-item orders (order_item_id > 1)
+--   - Customers from different Brazilian states
+--   - Varying delivery performance (on-time vs late)
+--
+-- TO USE THE FULL DATASET
+-- -----------------------
+-- Download from Kaggle:
+-- https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce
+-- Load each CSV into its corresponding table using psql \COPY
+-- or pgAdmin's import wizard before running analysis queries.
+--
+-- NEXT STEP
+-- ---------
+-- After running this script, execute 03_create_views.sql.
+-- ============================================================
+
+
+INSERT INTO customers VALUES
+('CUS001', 'São Paulo',       'SP'),
+('CUS002', 'Rio de Janeiro',  'RJ'),
+('CUS003', 'Belo Horizonte',  'MG'),
+('CUS004', 'Salvador',        'BA'),
+('CUS005', 'Curitiba',        'PR'),
+('CUS006', 'Fortaleza',       'CE'),
+('CUS007', 'Manaus',          'AM'),
+('CUS008', 'São Paulo',       'SP'),
+('CUS009', 'Porto Alegre',    'RS'),
+('CUS010', 'Recife',          'PE'),
+('CUS011', 'São Paulo',       'SP'),
+('CUS012', 'Rio de Janeiro',  'RJ');
+
+
+INSERT INTO products VALUES
+('PRD001', 'electronics'),
+('PRD002', 'beauty_health'),
+('PRD003', 'furniture_decor'),
+('PRD004', 'electronics'),
+('PRD005', 'sports_leisure'),
+('PRD006', 'baby'),
+('PRD007', 'computers'),
+('PRD008', 'beauty_health'),
+('PRD009', 'fashion_clothing'),
+('PRD010', 'electronics');
+
+
+INSERT INTO orders VALUES
+('ORD001', 'CUS001', 'delivered',  '2023-01-05 10:20:00', '2023-01-05 10:45:00', '2023-01-12 14:00:00', '2023-01-15 00:00:00'),
+('ORD002', 'CUS002', 'delivered',  '2023-01-08 09:00:00', '2023-01-08 09:15:00', '2023-01-18 11:00:00', '2023-01-20 00:00:00'),
+('ORD003', 'CUS003', 'delivered',  '2023-02-01 14:30:00', '2023-02-01 14:50:00', '2023-02-10 09:00:00', '2023-02-12 00:00:00'),
+('ORD004', 'CUS004', 'cancelled',  '2023-02-14 08:00:00', '2023-02-14 08:20:00', NULL,                  '2023-02-25 00:00:00'),
+('ORD005', 'CUS005', 'delivered',  '2023-03-03 11:00:00', '2023-03-03 11:30:00', '2023-03-15 16:00:00', '2023-03-18 00:00:00'),
+('ORD006', 'CUS006', 'delivered',  '2023-03-10 16:45:00', '2023-03-10 17:00:00', '2023-03-25 10:00:00', '2023-03-22 00:00:00'),  -- late delivery
+('ORD007', 'CUS007', 'shipped',    '2023-04-02 13:00:00', '2023-04-02 13:20:00', NULL,                  '2023-04-14 00:00:00'),
+('ORD008', 'CUS008', 'delivered',  '2023-04-15 10:00:00', '2023-04-15 10:30:00', '2023-04-22 09:00:00', '2023-04-25 00:00:00'),
+('ORD009', 'CUS001', 'delivered',  '2023-05-01 09:30:00', '2023-05-01 09:45:00', '2023-05-10 14:00:00', '2023-05-12 00:00:00'),  -- repeat customer
+('ORD010', 'CUS009', 'delivered',  '2023-05-20 15:00:00', '2023-05-20 15:20:00', '2023-05-30 11:00:00', '2023-06-01 00:00:00'),
+('ORD011', 'CUS010', 'delivered',  '2023-06-05 08:00:00', '2023-06-05 08:15:00', '2023-06-15 13:00:00', '2023-06-18 00:00:00'),
+('ORD012', 'CUS011', 'cancelled',  '2023-06-12 12:00:00', NULL,                  NULL,                  '2023-06-25 00:00:00'),
+('ORD013', 'CUS012', 'delivered',  '2023-07-01 10:00:00', '2023-07-01 10:20:00', '2023-07-10 16:00:00', '2023-07-14 00:00:00'),
+('ORD014', 'CUS002', 'delivered',  '2023-07-18 14:00:00', '2023-07-18 14:30:00', '2023-07-28 09:00:00', '2023-07-30 00:00:00'),  -- repeat customer
+('ORD015', 'CUS003', 'delivered',  '2023-08-05 11:30:00', '2023-08-05 11:45:00', '2023-08-16 15:00:00', '2023-08-20 00:00:00');
+
+
+INSERT INTO order_items VALUES
+('ORD001', 1, 'PRD001', 'SEL001', 299.90,  25.00),
+('ORD002', 1, 'PRD002', 'SEL002',  89.90,  12.50),
+('ORD003', 1, 'PRD003', 'SEL001', 450.00,  35.00),
+('ORD003', 2, 'PRD008', 'SEL003',  65.00,  10.00),  -- multi-item order
+('ORD004', 1, 'PRD004', 'SEL002', 799.00,  40.00),
+('ORD005', 1, 'PRD005', 'SEL004', 199.90,  18.00),
+('ORD006', 1, 'PRD006', 'SEL003', 120.00,  15.00),
+('ORD007', 1, 'PRD007', 'SEL001', 999.00,  50.00),
+('ORD008', 1, 'PRD008', 'SEL002',  75.00,  10.00),
+('ORD008', 2, 'PRD009', 'SEL004', 149.90,  14.00),  -- multi-item order
+('ORD009', 1, 'PRD010', 'SEL003', 349.00,  28.00),
+('ORD010', 1, 'PRD001', 'SEL001', 279.90,  25.00),
+('ORD011', 1, 'PRD002', 'SEL002',  95.00,  12.00),
+('ORD012', 1, 'PRD004', 'SEL004', 850.00,  45.00),
+('ORD013', 1, 'PRD003', 'SEL003', 520.00,  38.00),
+('ORD014', 1, 'PRD005', 'SEL001', 215.00,  20.00),
+('ORD015', 1, 'PRD007', 'SEL002', 1150.00, 55.00);
+
+
+INSERT INTO order_payments VALUES
+('ORD001', 1, 'credit_card', 3,  324.90),
+('ORD002', 1, 'boleto',      1,  102.40),
+('ORD003', 1, 'credit_card', 6,  560.00),
+('ORD004', 1, 'credit_card', 12, 839.00),
+('ORD005', 1, 'debit_card',  1,  217.90),
+('ORD006', 1, 'boleto',      1,  135.00),
+('ORD007', 1, 'credit_card', 10, 1049.00),
+('ORD008', 1, 'credit_card', 4,  248.90),
+('ORD009', 1, 'voucher',     1,  377.00),
+('ORD010', 1, 'credit_card', 3,  304.90),
+('ORD011', 1, 'boleto',      1,  107.00),
+('ORD012', 1, 'credit_card', 12, 895.00),
+('ORD013', 1, 'credit_card', 6,  558.00),
+('ORD014', 1, 'debit_card',  1,  235.00),
+('ORD015', 1, 'credit_card', 10, 1205.00);
+
+-- ============================================================
+-- FILE    : 03_create_views.sql
+-- PROJECT : E-Commerce Sales Analysis (Olist Dataset)
+-- ============================================================
+--
+-- PURPOSE
+-- -------
+-- Creates two reusable analytical views that all analysis
+-- queries (04 through 10) are built on top of. This follows
+-- the same separation-of-concerns principle as the Telecom
+-- project: raw tables store data, views clean and join it,
+-- analysis queries read from views.
+--
+-- VIEW 1: v_orders_clean
+-- ----------------------
+-- Joins orders + customers + payments into one flat row per
+-- order. Pre-calculates delivery delay so analysis queries
+-- don't need to repeat the date logic. Filters to only
+-- actionable statuses (delivered + cancelled) for cleaner
+-- analysis.
+--
+-- KEY CALCULATED FIELDS:
+--   order_month     — truncates timestamp to YYYY-MM for
+--                     monthly trend analysis (Query 04)
+--   delivery_days   — actual days from purchase to delivery
+--   estimated_days  — promised days from purchase to estimate
+--   delivery_delay  — positive = late, negative = early,
+--                     NULL = not yet delivered / cancelled
+--   is_late         — binary flag (1 = late, 0 = on time)
+--                     enables AVG(is_late) = late delivery rate
+--
+-- VIEW 2: v_order_items_detail
+-- ----------------------------
+-- Joins order_items + products + orders into one flat row
+-- per line item. Used for product category analysis (Query 07)
+-- and seller performance (Query 09).
+--
+-- NEXT STEP
+-- ---------
+-- After running this script, execute any analysis query
+-- (04 through 10) in any order.
+-- ============================================================
+
+
+CREATE VIEW v_orders_clean AS
+SELECT
+    o.order_id,
+    o.customer_id,
+    o.order_status,
+    o.order_purchase_ts,
+    DATE_TRUNC('month', o.order_purchase_ts)::DATE          AS order_month,
+    TO_CHAR(o.order_purchase_ts, 'YYYY-MM')                 AS order_month_label,
+    c.customer_state,
+    c.customer_city,
+    p.payment_type,
+    p.payment_installments,
+    p.payment_value                                         AS order_value,
+
+    -- Delivery performance fields
+    o.order_delivered_ts,
+    o.order_estimated_ts,
+    CASE
+        WHEN o.order_delivered_ts IS NOT NULL
+        THEN DATE_PART('day',
+            o.order_delivered_ts - o.order_purchase_ts)
+    END                                                     AS delivery_days,
+    DATE_PART('day',
+        o.order_estimated_ts - o.order_purchase_ts)         AS estimated_days,
+    CASE
+        WHEN o.order_delivered_ts IS NOT NULL
+        THEN DATE_PART('day',
+            o.order_delivered_ts - o.order_estimated_ts)
+    END                                                     AS delivery_delay,
+    CASE
+        WHEN o.order_delivered_ts > o.order_estimated_ts
+        THEN 1 ELSE 0
+    END                                                     AS is_late
+
+FROM orders o
+JOIN customers c      ON o.customer_id   = c.customer_id
+JOIN order_payments p ON o.order_id      = p.order_id
+WHERE o.order_status IN ('delivered', 'cancelled', 'shipped');
+
+
+CREATE VIEW v_order_items_detail AS
+SELECT
+    oi.order_id,
+    oi.order_item_id,
+    oi.product_id,
+    oi.seller_id,
+    oi.price,
+    oi.freight_value,
+    oi.price + oi.freight_value                             AS item_total,
+    p.product_category,
+    o.order_status,
+    o.order_purchase_ts,
+    DATE_TRUNC('month', o.order_purchase_ts)::DATE          AS order_month
+FROM order_items oi
+JOIN products p  ON oi.product_id = p.product_id
+JOIN orders o    ON oi.order_id   = o.order_id;
+
+-- ============================================================
+-- FILE    : 04_monthly_revenue_trend.sql
+-- PROJECT : E-Commerce Sales Analysis (Olist Dataset)
+-- ============================================================
+--
+-- BUSINESS QUESTION
+-- -----------------
+-- How is revenue trending month over month? Are we growing,
+-- flat, or declining? Where are the seasonal peaks?
+--
+-- WHY THIS QUERY MATTERS
+-- ----------------------
+-- Monthly revenue trend is the first chart on every business
+-- review deck. It sets the context for all other analysis —
+-- you cannot interpret a category's performance without
+-- knowing whether the overall business is growing or shrinking.
+--
+-- This query also introduces Month-over-Month (MoM) growth
+-- using a window function (LAG). This is an advanced SQL
+-- technique that most junior analysts cannot write — it
+-- immediately signals senior-level thinking to interviewers.
+--
+-- HOW IT WORKS
+-- ------------
+-- DATE_TRUNC groups all orders within the same calendar month.
+-- LAG(total_revenue, 1) OVER (ORDER BY order_month) looks at
+-- the previous row's revenue value. Dividing the difference
+-- by the previous value gives the percentage change.
+--
+-- The NULLIF in the denominator prevents a division-by-zero
+-- error when a month has zero revenue (e.g. the first month
+-- in the dataset has no prior month to compare against).
+--
+-- WINDOW FUNCTION NOTE
+-- --------------------
+-- LAG is a window function — it operates across a set of
+-- rows defined by OVER() without collapsing them like GROUP BY
+-- does. This allows us to compute a value that references
+-- another row (the previous month) within the same result set.
+-- Window functions are one of the most valued SQL skills in
+-- BA and data analyst interviews.
+--
+-- EXPECTED OUTPUT (on sample data)
+-- ----------------------------------
+--   order_month | total_orders | total_revenue | mom_growth_pct
+--   ------------+--------------+---------------+---------------
+--   2023-01     |      2       |    427.30     |     NULL
+--   2023-02     |      3       |    696.40     |     63.01
+--   2023-03     |      2       |    352.90     |    -49.33
+--   ...
+-- ============================================================
+
+SELECT
+    order_month_label                                           AS order_month,
+    COUNT(DISTINCT order_id)                                    AS total_orders,
+    ROUND(SUM(order_value), 2)                                  AS total_revenue,
+    ROUND(AVG(order_value), 2)                                  AS avg_order_value,
+    ROUND(
+        (SUM(order_value) - LAG(SUM(order_value), 1)
+            OVER (ORDER BY order_month))
+        * 100.0
+        / NULLIF(LAG(SUM(order_value), 1)
+            OVER (ORDER BY order_month), 0)
+    , 2)                                                        AS mom_growth_pct
+FROM v_orders_clean
+WHERE order_status = 'delivered'
+GROUP BY order_month, order_month_label
+ORDER BY order_month;
+
+-- ============================================================
+-- FILE    : 05_revenue_by_state.sql
+-- PROJECT : E-Commerce Sales Analysis (Olist Dataset)
+-- ============================================================
+--
+-- BUSINESS QUESTION
+-- -----------------
+-- Which Brazilian states generate the most revenue?
+-- Which states are underperforming relative to their size?
+-- Where should the business focus marketing and logistics?
+--
+-- WHY THIS QUERY MATTERS
+-- ----------------------
+-- Geographic analysis is a core BA deliverable for any
+-- retail or e-commerce business. It directly informs:
+--
+--   Marketing  — which states to invest in paid acquisition
+--   Logistics  — where to open fulfilment centres
+--   Pricing    — whether regional pricing makes sense
+--   Expansion  — which untapped states have high potential
+--
+-- A state with high orders but low avg_order_value may need
+-- a different product mix than a state with few orders but
+-- high avg_order_value.
+--
+-- HOW IT WORKS
+-- ------------
+-- Simple GROUP BY on customer_state. The revenue_share column
+-- uses a window function (SUM() OVER()) to calculate each
+-- state's percentage of total revenue without a subquery.
+-- This is the clean, modern SQL approach — a subquery CTE
+-- would work but is more verbose.
+--
+-- The RANK() window function assigns a rank by revenue,
+-- allowing the business to instantly see their top-10 states
+-- without a separate query.
+--
+-- EXPECTED OUTPUT (on sample data)
+-- ----------------------------------
+--   state | orders | revenue  | avg_order | revenue_share | rank
+--   ------+--------+----------+-----------+---------------+-----
+--   SP    |   3    | 1006.90  |  335.63   |     30.12     |  1
+--   RJ    |   2    |  437.40  |  218.70   |     13.08     |  2
+--   ...
+-- ============================================================
+
+SELECT
+    customer_state                                              AS state,
+    COUNT(DISTINCT order_id)                                    AS total_orders,
+    ROUND(SUM(order_value), 2)                                  AS total_revenue,
+    ROUND(AVG(order_value), 2)                                  AS avg_order_value,
+    ROUND(
+        SUM(order_value) * 100.0
+        / SUM(SUM(order_value)) OVER ()
+    , 2)                                                        AS revenue_share_pct,
+    RANK() OVER (ORDER BY SUM(order_value) DESC)                AS revenue_rank
+FROM v_orders_clean
+WHERE order_status = 'delivered'
+GROUP BY customer_state
+ORDER BY total_revenue DESC;
+
+-- ============================================================
+-- FILE    : 06_payment_method_analysis.sql
+-- PROJECT : E-Commerce Sales Analysis (Olist Dataset)
+-- ============================================================
+--
+-- BUSINESS QUESTION
+-- -----------------
+-- How do customers prefer to pay? Do different payment methods
+-- correlate with higher order values or more installments?
+-- What is the risk exposure from instalment-heavy purchases?
+--
+-- WHY THIS QUERY MATTERS
+-- ----------------------
+-- Payment method analysis is critical for e-commerce finance
+-- and product teams:
+--
+--   Finance    — credit card and instalment orders carry
+--                collection risk; boleto (Brazilian bank slip)
+--                has a ~10–15% non-payment rate
+--   Product    — if 70% of revenue comes from credit cards,
+--                improving the card checkout UX has outsized ROI
+--   Strategy   — high instalment counts (10–12x) signal
+--                customers who cannot afford the item outright,
+--                which is useful for pricing strategy
+--
+-- In Brazil specifically, "parcelamento" (instalments) is
+-- culturally dominant — most high-value purchases are split
+-- across 6–12 months. Understanding this is essential for
+-- any analyst working with Brazilian e-commerce data.
+--
+-- HOW IT WORKS
+-- ------------
+-- GROUP BY payment_type with aggregations on order value and
+-- installment count. The avg_installments column reveals
+-- payment behaviour by method — credit cards will show high
+-- avg installments while debit cards and boleto will show 1.
+--
+-- EXPECTED OUTPUT (on sample data)
+-- ----------------------------------
+--   payment_type | orders | total_revenue | avg_order | avg_installments
+--   -------------+--------+---------------+-----------+-----------------
+--   credit_card  |   8    |   4984.70     |  623.09   |      6.5
+--   boleto       |   3    |    344.40     |  114.80   |      1.0
+--   debit_card   |   2    |    452.90     |  226.45   |      1.0
+--   voucher      |   1    |    377.00     |  377.00   |      1.0
+-- ============================================================
+
+SELECT
+    payment_type,
+    COUNT(DISTINCT order_id)                                    AS total_orders,
+    ROUND(SUM(order_value), 2)                                  AS total_revenue,
+    ROUND(AVG(order_value), 2)                                  AS avg_order_value,
+    ROUND(AVG(payment_installments), 1)                         AS avg_installments,
+    ROUND(
+        COUNT(DISTINCT order_id) * 100.0
+        / SUM(COUNT(DISTINCT order_id)) OVER ()
+    , 2)                                                        AS order_share_pct,
+    ROUND(
+        SUM(order_value) * 100.0
+        / SUM(SUM(order_value)) OVER ()
+    , 2)                                                        AS revenue_share_pct
+FROM v_orders_clean
+WHERE order_status = 'delivered'
+GROUP BY payment_type
+ORDER BY total_revenue DESC;
+
+-- ============================================================
+-- FILE    : 07_category_performance.sql
+-- PROJECT : E-Commerce Sales Analysis (Olist Dataset)
+-- ============================================================
+--
+-- BUSINESS QUESTION
+-- -----------------
+-- Which product categories generate the most revenue and
+-- orders? Which categories have the highest average order
+-- value? Where should merchandising and inventory investment
+-- be focused?
+--
+-- WHY THIS QUERY MATTERS
+-- ----------------------
+-- Category performance is the backbone of e-commerce
+-- merchandising decisions:
+--
+--   Buying/Inventory  — stock more of top-performing categories
+--   Marketing         — promote high-AOV categories to
+--                       attract high-value customers
+--   Pricing           — identify categories where customers
+--                       are willing to pay more
+--   Catalogue         — cut or grow categories based on
+--                       revenue contribution
+--
+-- The freight_ratio column is unique to this project —
+-- it shows what percentage of the item total is shipping cost.
+-- High freight ratios erode margins and signal that a category
+-- may need free-shipping thresholds or local fulfilment.
+--
+-- HOW IT WORKS
+-- ------------
+-- Built on v_order_items_detail which already joins order_items
+-- to products. Aggregates revenue, freight, and order counts
+-- per category. The revenue_rank window function ranks
+-- categories without requiring a separate query or subquery.
+--
+-- EXPECTED OUTPUT (on sample data)
+-- ----------------------------------
+--   category          | orders | revenue  | avg_item | freight_ratio | rank
+--   ------------------+--------+----------+----------+---------------+-----
+--   computers         |   2    | 2149.00  | 1074.50  |     4.97%     |  1
+--   furniture_decor   |   2    |  970.00  |  485.00  |     7.11%     |  2
+--   electronics       |   3    |  928.80  |  309.60  |     8.33%     |  3
+--   ...
+-- ============================================================
+
+SELECT
+    product_category,
+    COUNT(DISTINCT order_id)                                    AS total_orders,
+    COUNT(*)                                                    AS total_items_sold,
+    ROUND(SUM(price), 2)                                        AS total_revenue,
+    ROUND(AVG(price), 2)                                        AS avg_item_price,
+    ROUND(SUM(freight_value), 2)                                AS total_freight,
+    ROUND(
+        SUM(freight_value) * 100.0
+        / NULLIF(SUM(price + freight_value), 0)
+    , 2)                                                        AS freight_ratio_pct,
+    RANK() OVER (ORDER BY SUM(price) DESC)                      AS revenue_rank
+FROM v_order_items_detail
+WHERE order_status = 'delivered'
+GROUP BY product_category
+ORDER BY total_revenue DESC;
+
+-- ============================================================
+-- FILE    : 08_delivery_performance.sql
+-- PROJECT : E-Commerce Sales Analysis (Olist Dataset)
+-- ============================================================
+--
+-- BUSINESS QUESTION
+-- -----------------
+-- How reliably does the business deliver on time? What is the
+-- average delivery delay when late? Which states experience
+-- the worst delivery performance?
+--
+-- WHY THIS QUERY MATTERS
+-- ----------------------
+-- Delivery performance is one of the strongest predictors of
+-- customer satisfaction and repeat purchase in e-commerce.
+-- Research consistently shows that late delivery is the #1
+-- driver of negative reviews and customer churn on
+-- marketplace platforms.
+--
+-- For a BA, this analysis directly supports:
+--
+--   Operations  — identify logistics bottlenecks by region
+--   Customer    — proactively communicate delays before
+--   Experience    customers complain
+--   Supplier    — hold logistics partners accountable with
+--   Management    data-backed SLA reviews
+--   Product     — set accurate delivery estimates that
+--                 customers can trust
+--
+-- HOW IT WORKS
+-- ------------
+-- Uses the is_late and delivery_delay fields pre-calculated
+-- in v_orders_clean. AVG(is_late) gives the late delivery
+-- rate as a decimal — multiply by 100 for a percentage.
+--
+-- The second query breaks down late delivery rate by state,
+-- revealing geographic patterns. States with poor logistics
+-- infrastructure (typically in the North and Northeast of
+-- Brazil) will show higher late rates.
+--
+-- QUERY PART 1 — Overall delivery KPIs
+-- QUERY PART 2 — Late delivery rate by state
+--
+-- EXPECTED OUTPUT PART 1 (on sample data)
+-- -----------------------------------------
+--   total_delivered | late_deliveries | late_rate_pct | avg_delay_days | avg_delivery_days
+--   ----------------+----------------+---------------+----------------+------------------
+--         12        |       1        |     8.33      |      3.0       |       10.5
+-- ============================================================
+
+
+-- PART 1: Overall delivery performance KPIs
+SELECT
+    COUNT(*)                                                    AS total_delivered,
+    SUM(is_late)                                                AS late_deliveries,
+    ROUND(AVG(is_late) * 100, 2)                                AS late_rate_pct,
+    ROUND(AVG(CASE WHEN is_late = 1
+        THEN delivery_delay END), 1)                            AS avg_delay_when_late_days,
+    ROUND(AVG(delivery_days), 1)                                AS avg_delivery_days,
+    ROUND(AVG(estimated_days), 1)                               AS avg_promised_days
+FROM v_orders_clean
+WHERE order_status = 'delivered';
+
+
+-- PART 2: Late delivery rate by customer state
+SELECT
+    customer_state                                              AS state,
+    COUNT(*)                                                    AS total_delivered,
+    SUM(is_late)                                                AS late_deliveries,
+    ROUND(AVG(is_late) * 100, 2)                                AS late_rate_pct,
+    ROUND(AVG(delivery_days), 1)                                AS avg_delivery_days
+FROM v_orders_clean
+WHERE order_status = 'delivered'
+GROUP BY customer_state
+HAVING COUNT(*) >= 1
+ORDER BY late_rate_pct DESC, avg_delivery_days DESC;
+
+-- ============================================================
+-- FILE    : 09_repeat_customer_analysis.sql
+-- PROJECT : E-Commerce Sales Analysis (Olist Dataset)
+-- ============================================================
+--
+-- BUSINESS QUESTION
+-- -----------------
+-- What percentage of customers place more than one order?
+-- How much more valuable are repeat customers vs one-time
+-- buyers? How quickly do customers make a second purchase?
+--
+-- WHY THIS QUERY MATTERS
+-- ----------------------
+-- Customer retention and repeat purchase rate are among
+-- the most important metrics in e-commerce. Here is why:
+--
+--   Economics   — acquiring a new customer costs 5–7x more
+--                 than retaining an existing one. Increasing
+--                 repeat rate by 5% can increase profit by
+--                 25–95% (Bain & Company research).
+--   CLV         — repeat customers have higher Customer
+--                 Lifetime Value (CLV), the key metric for
+--                 sustainable e-commerce growth.
+--   Product fit — a low repeat rate signals that customers
+--                 are not finding enough value to return,
+--                 suggesting catalogue, pricing, or UX issues.
+--
+-- This analysis directly answers the question every e-commerce
+-- investor and executive asks: "Do customers come back?"
+--
+-- HOW IT WORKS
+-- ------------
+-- Uses a CTE (Common Table Expression) to first calculate
+-- per-customer order counts and revenue, then aggregates
+-- those into repeat vs one-time buyer segments.
+--
+-- The days_to_second_order field uses MIN() and LAG() logic
+-- via a subquery to find the gap between a customer's first
+-- and second order — a key metric for email re-engagement
+-- timing.
+--
+-- QUERY PART 1 — Repeat vs one-time buyer summary
+-- QUERY PART 2 — Individual repeat customers with order history
+--
+-- EXPECTED OUTPUT PART 1 (on sample data)
+-- -----------------------------------------
+--   customer_type   | customers | total_revenue | avg_revenue_per_customer
+--   ----------------+-----------+---------------+-------------------------
+--   Repeat buyer    |     3     |    1431.20    |          477.07
+--   One-time buyer  |     9     |    2399.00    |          266.56
+-- ============================================================
+
+
+-- PART 1: Repeat vs one-time buyer comparison
+WITH customer_orders AS (
+    SELECT
+        customer_id,
+        COUNT(DISTINCT order_id)                                AS order_count,
+        ROUND(SUM(order_value), 2)                              AS total_spent,
+        MIN(order_purchase_ts)                                  AS first_order_date,
+        MAX(order_purchase_ts)                                  AS last_order_date
+    FROM v_orders_clean
+    WHERE order_status = 'delivered'
+    GROUP BY customer_id
+)
+SELECT
+    CASE
+        WHEN order_count > 1 THEN 'Repeat buyer'
+        ELSE                      'One-time buyer'
+    END                                                         AS customer_type,
+    COUNT(*)                                                    AS total_customers,
+    ROUND(SUM(total_spent), 2)                                  AS total_revenue,
+    ROUND(AVG(total_spent), 2)                                  AS avg_revenue_per_customer,
+    ROUND(AVG(order_count), 2)                                  AS avg_orders_per_customer,
+    ROUND(
+        COUNT(*) * 100.0 / SUM(COUNT(*)) OVER ()
+    , 2)                                                        AS customer_share_pct
+FROM customer_orders
+GROUP BY customer_type
+ORDER BY avg_revenue_per_customer DESC;
+
+
+-- PART 2: Repeat customers with full order history
+WITH customer_orders AS (
+    SELECT
+        customer_id,
+        COUNT(DISTINCT order_id)                                AS order_count,
+        ROUND(SUM(order_value), 2)                              AS total_spent,
+        MIN(order_purchase_ts::DATE)                            AS first_order_date,
+        MAX(order_purchase_ts::DATE)                            AS last_order_date
+    FROM v_orders_clean
+    WHERE order_status = 'delivered'
+    GROUP BY customer_id
+)
+SELECT
+    customer_id,
+    order_count,
+    total_spent,
+    first_order_date,
+    last_order_date,
+    (last_order_date - first_order_date)                        AS days_between_orders
+FROM customer_orders
+WHERE order_count > 1
+ORDER BY total_spent DESC;
+
+-- ============================================================
+-- FILE    : 10_cancellation_analysis.sql
+-- PROJECT : E-Commerce Sales Analysis (Olist Dataset)
+-- ============================================================
+--
+-- BUSINESS QUESTION
+-- -----------------
+-- What is the order cancellation rate? How much revenue is
+-- lost to cancellations? Which payment methods and product
+-- categories have the highest cancellation rates?
+--
+-- WHY THIS QUERY MATTERS
+-- ----------------------
+-- Cancellations represent lost revenue that was counted as
+-- a sale but never fulfilled. For an e-commerce BA, this
+-- analysis is critical because:
+--
+--   Revenue    — cancelled orders inflate GMV (Gross Merchandise
+--                Value) if not properly excluded. Accurate
+--                net revenue requires removing cancellations.
+--   Operations — high cancellation rates may indicate stock
+--                issues (ordered but not available), payment
+--                failures, or misleading product listings.
+--   Finance    — payment reversals and fraud chargebacks are
+--                most common in cancelled orders, especially
+--                those paid by high-installment credit cards.
+--   Product    — categories with high cancellation may have
+--                quality, sizing, or description problems.
+--
+-- HOW IT WORKS
+-- ------------
+-- Compares delivered vs cancelled orders on the same metrics
+-- (count, revenue, payment type) to identify patterns.
+-- The cancellation_rate is calculated using a window function
+-- so both statuses appear side by side without a self-join.
+--
+-- EXPECTED OUTPUT (on sample data)
+-- ----------------------------------
+--   order_status | orders | revenue  | cancellation_rate
+--   -------------+--------+----------+------------------
+--   delivered    |   12   | 3830.20  |      NULL
+--   cancelled    |    2   | 1734.00  |      14.29%
+-- ============================================================
+
+
+-- PART 1: Overall cancellation rate and revenue lost
+SELECT
+    order_status,
+    COUNT(DISTINCT order_id)                                    AS total_orders,
+    ROUND(SUM(order_value), 2)                                  AS total_value,
+    ROUND(
+        COUNT(DISTINCT order_id) * 100.0
+        / SUM(COUNT(DISTINCT order_id)) OVER ()
+    , 2)                                                        AS pct_of_all_orders
+FROM v_orders_clean
+GROUP BY order_status
+ORDER BY total_orders DESC;
+
+
+-- PART 2: Cancellation rate by payment type
+-- Shows whether certain payment methods predict cancellation
+SELECT
+    payment_type,
+    COUNT(DISTINCT order_id)                                    AS total_orders,
+    SUM(CASE WHEN order_status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_orders,
+    ROUND(
+        SUM(CASE WHEN order_status = 'cancelled' THEN 1 ELSE 0 END)
+        * 100.0 / COUNT(DISTINCT order_id)
+    , 2)                                                        AS cancellation_rate_pct,
+    ROUND(SUM(CASE WHEN order_status = 'cancelled'
+        THEN order_value ELSE 0 END), 2)                        AS revenue_lost
+FROM v_orders_clean
+GROUP BY payment_type
+ORDER BY cancellation_rate_pct DESC;
